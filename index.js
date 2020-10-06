@@ -1,30 +1,59 @@
+//Basic modules - bundled with Node.js
 const fs = require('fs');
 const http = require('http');
 const url = require('url');
 
+//Read our JSON file from the filesystem and parse it
 const json = fs.readFileSync(`${__dirname}/data/data.json`, 'utf-8');
 const laptopData = JSON.parse(json);
 
+//Create server
 const server = http.createServer((req, res) => {
-	console.log('Someone accessed the server.');
-	
 	//Parse pathname property from URL
 	const pathName = url.parse(req.url, true).pathname;
 	//Parse query obj.id from URL
 	const id = url.parse(req.url, true).query.id;
 	
+	//PRODUCTS OVERVIEW ---------------------
 	if (pathName === '/products' || pathName === '/') {
-		//Write header signifying response ok
+		//Write header signifying response ok.
 		res.writeHead(200, {'Content-type': 'text/html'});
-		//Send actual response (comes after header)
-		res.end('This is the products url response page.');
+		
+		//Load overview template
+		fs.readFile(`${__dirname}/templates/temp-overview.html`, 'utf-8', (err, data) => {
+			let overviewOutput = data; // -- Overview template html
+			
+			//Load cards during overview loading
+			fs.readFile(`${__dirname}/templates/temp-card.html`, 'utf-8', (err, data) => {
+				const cardsOutput = laptopData.map(el => replaceTemplate(data, el)).join(''); // -- Processed card output
+				overviewOutput = overviewOutput.replace('{%CARDS%}', cardsOutput); // -- Mutate overview template with cards
+				
+				//Send final response (comes after header)
+				res.end(overviewOutput);
+			});
+		});
 	}
 	
+	//LAPTOP DETAILS -----------------------
 	else if (pathName === '/laptop' && id < laptopData.length) {
 		res.writeHead(200, {'Content-type': 'text/html'});
-		res.end(`This is the laptop url response page for latop ${id}`);
+		
+		fs.readFile(`${__dirname}/templates/temp-laptop.html`, 'utf-8', (err, data) => {
+			const laptop = laptopData[id];
+			const output = replaceTemplate(data, laptop);
+			res.end(output);
+		});
 	}
 	
+	//IMAGES
+	else if ((/\.(jpg|png)$/i).test(pathName)) {
+		fs.readFile(`${__dirname}/data/img${pathName}`, (err, data) => {
+			res.writeHead(200, {'Content-type': 'image/jpg'});
+			res.end(data);
+		});
+	}
+	
+	//URL NOT FOUND ------------------------
 	else {
 		res.writeHead(404, {'Content-type': 'text/html'});
 		res.end('URL not found. :(');
@@ -32,6 +61,20 @@ const server = http.createServer((req, res) => {
 	
 });
 
+//Notify us that our server is listening
 server.listen(1337, '127.0.0.1', () => {
 	console.log('Server listening...');
 });
+
+function replaceTemplate(orig, laptop) {
+	let output = orig.replace(/{%PRODUCTNAME%}/g, laptop.productName);
+	output = output.replace(/{%IMAGE%}/g, laptop.image);
+	output = output.replace(/{%PRICE%}/g, laptop.price);
+	output = output.replace(/{%SCREEN%}/g, laptop.screen);
+	output = output.replace(/{%CPU%}/g, laptop.cpu);
+	output = output.replace(/{%STORAGE%}/g, laptop.storage);
+	output = output.replace(/{%RAM%}/g, laptop.ram);
+	output = output.replace(/{%DESCRIPTION%}/g, laptop.description);
+	output = output.replace(/{%ID%}/g, laptop.id);
+	return output;
+}
